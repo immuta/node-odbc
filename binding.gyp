@@ -2,7 +2,7 @@
   'targets' : [
     {
       'target_name' : 'odbc_bindings',
-      'sources' : [ 
+      'sources' : [
         'src/odbc.cpp',
         'src/odbc_connection.cpp',
         'src/odbc_statement.cpp',
@@ -13,13 +13,11 @@
       'include_dirs': [
         "<!(node -e \"require('nan')\")"
       ],
-      'defines' : [
-        'UNICODE'
-      ],
+      'defines' : [],
       'conditions' : [
         [ 'OS == "linux"', {
-          'libraries' : [ 
-            '-lodbc' 
+          'libraries' : [
+            '-lodbc'
           ],
           'cflags' : [
             '-g'
@@ -28,7 +26,7 @@
         [ 'OS == "mac"', {
           'libraries' : [
             '-L/usr/local/lib',
-            '-lodbc' 
+            '-lodbc'
           ]
         }],
         [ 'OS=="win"', {
@@ -36,8 +34,8 @@
             'src/strptime.c',
             'src/odbc.cpp'
           ],
-          'libraries' : [ 
-            '-lodbccp32.lib' 
+          'libraries' : [
+            '-lodbccp32.lib'
           ]
         }]
       ]

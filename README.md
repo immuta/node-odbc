@@ -42,10 +42,10 @@ var db = require('odbc')()
 
 db.open(cn, function (err) {
   if (err) return console.log(err);
-  
+
   db.query('select * from user where user_id = ?', [42], function (err, data) {
     if (err) console.log(err);
-    
+
     console.log(data);
 
     db.close(function () {
@@ -60,7 +60,7 @@ api
 
 ### Database
 
-The simple api is based on instances of the `Database` class. You may get an 
+The simple api is based on instances of the `Database` class. You may get an
 instance in one of the following ways:
 
 ```javascript
@@ -73,7 +73,7 @@ or by using the helper function:
 
 ```javascript
 var db = require("odbc")();
-``` 
+```
 
 or by creating an instance with the constructor function:
 
@@ -148,7 +148,7 @@ db.open(cn, function (err) {
 		if (err) {
 			return console.log(err);
 		}
-		
+
 		console.log(rows);
 
 		//if moreResultSets is truthy, then this callback function will be called
@@ -194,9 +194,9 @@ db.open(cn, function (err) {
 	if (err) {
 		return console.log(err);
 	}
-	
+
 	//we now have an open connection to the database
-	
+
 	db.close(function (err) {
 		console.log("the database connection is now closed");
 	});
@@ -472,7 +472,7 @@ pool.open(cn, function (err, db) {
 
 	//db is now an open database connection and can be used like normal
 	//but all we will do now is close the whole pool
-	
+
 	pool.close(function () {
 		console.log("all connections in the pool are closed");
 	});
@@ -493,7 +493,7 @@ var connectionString = "DRIVER={FreeTDS};SERVER=host;UID=user;PWD=password;DATAB
 db.open(connectionString, function(err) {
 	db.query("select * from table", function(err, rows, moreResultSets) {
 		console.log(util.inspect(rows, null, 10));
-		
+
 		db.close(function() {
 			console.log("Database connection closed");
 		});
@@ -517,8 +517,8 @@ build options
 
 ### Debug
 
-If you would like to enable debugging messages to be displayed you can add the 
-flag `DEBUG` to the defines section of the `binding.gyp` file and then execute 
+If you would like to enable debugging messages to be displayed you can add the
+flag `DEBUG` to the defines section of the `binding.gyp` file and then execute
 `node-gyp rebuild`.
 
 ```javascript
@@ -531,10 +531,10 @@ flag `DEBUG` to the defines section of the `binding.gyp` file and then execute
 
 ### Dynodbc
 
-You may also enable the ability to load a specific ODBC driver and bypass the 
+You may also enable the ability to load a specific ODBC driver and bypass the
 ODBC driver management layer. A performance increase of ~5Kqps was seen using
 this method with the libsqlite3odbc driver. To do this, specify the `dynodbc`
-flag in the defines section of the `binding.gyp` file. You will also need to 
+flag in the defines section of the `binding.gyp` file. You will also need to
 remove any library references in `binding.gyp`. Then execute `node-gyp
 rebuild`.
 
@@ -545,20 +545,16 @@ rebuild`.
 ],
 'conditions' : [
   [ 'OS == "linux"', {
-    'libraries' : [ 
-      //remove this: '-lodbc' 
+    'libraries' : [
+      //remove this: '-lodbc'
     ],
 <snip>
 ```
 
 ### Unicode
 
-By default, UNICODE suppport is enabled. This should provide the most accurate
-way to get Unicode strings submitted to your database. For best results, you 
-may want to put your Unicode string into bound parameters. 
-
-However, if you experience issues or you think that submitting UTF8 strings will
-work better or faster, you can remove the `UNICODE` define in `binding.gyp`
+By default, UNICODE suppport is disabled. If you wish to enable UNICODE support
+you can add the `UNICODE` define in `binding.gyp`
 
 ```javascript
 <snip>
@@ -587,7 +583,7 @@ define in `binding.gyp`
 
 When column names are retrieved from ODBC, you can request by SQL_DESC_NAME or
 SQL_DESC_LABEL. SQL_DESC_NAME is the exact column name or none if there is none
-defined. SQL_DESC_LABEL is the heading or column name or calculation. 
+defined. SQL_DESC_LABEL is the heading or column name or calculation.
 SQL_DESC_LABEL is used by default and seems to work well in most cases.
 
 If you want to use the exact column name via SQL_DESC_NAME, enable the `STRICT_COLUMN_NAMES`
@@ -605,39 +601,39 @@ tips
 ----
 ### Using node < v0.10 on Linux
 
-Be aware that through node v0.9 the uv_queue_work function, which is used to 
-execute the ODBC functions on a separate thread, uses libeio for its thread 
+Be aware that through node v0.9 the uv_queue_work function, which is used to
+execute the ODBC functions on a separate thread, uses libeio for its thread
 pool. This thread pool by default is limited to 4 threads.
 
-This means that if you have long running queries spread across multiple 
-instances of odbc.Database() or using odbc.Pool(), you will only be able to 
+This means that if you have long running queries spread across multiple
+instances of odbc.Database() or using odbc.Pool(), you will only be able to
 have 4 concurrent queries.
 
 You can increase the thread pool size by using @developmentseed's [node-eio]
 (https://github.com/developmentseed/node-eio).
 
-#### install: 
+#### install:
 ```bash
 npm install eio
 ```
 
 #### usage:
 ```javascript
-var eio = require('eio'); 
+var eio = require('eio');
 eio.setMinParallel(threadCount);
 ```
 
 ### Using the FreeTDS ODBC driver
 
-* If you have column names longer than 30 characters, you should add 
+* If you have column names longer than 30 characters, you should add
   "TDS_Version=7.0" to your connection string to retrive the full column name.
   * Example : "DRIVER={FreeTDS};SERVER=host;UID=user;PWD=password;DATABASE=dbname;TDS_Version=7.0"
-* If you got error "[unixODBC][FreeTDS][SQL Server]Unable to connect to data source" 
+* If you got error "[unixODBC][FreeTDS][SQL Server]Unable to connect to data source"
   Try use SERVERNAME instead of SERVER
   * Example : "DRIVER={FreeTDS};SERVERNAME=host;UID=user;PWD=password;DATABASE=dbname"
 * Be sure that your odbcinst.ini has the proper threading configuration for your
   FreeTDS driver. If you choose the incorrect threading model it may cause
-  the thread pool to be blocked by long running queries. This is what 
+  the thread pool to be blocked by long running queries. This is what
   @wankdanker currently uses on Ubuntu 12.04:
 
 ```
@@ -646,7 +642,7 @@ Description     = TDS driver (Sybase/MS SQL)
 Driver          = libtdsodbc.so
 Setup           = libtdsS.so
 CPTimeout       = 120
-CPReuse         = 
+CPReuse         =
 Threading       = 0
 ```
 
@@ -668,9 +664,9 @@ Copyright (c) 2013 Dan VerWeire <dverweire@gmail.com>
 
 Copyright (c) 2010 Lee Smith <notwink@gmail.com>
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of 
-this software and associated documentation files (the "Software"), to deal in 
-the Software without restriction, including without limitation the rights to 
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
 use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
 the Software, and to permit persons to whom the Software is furnished to do so,
 subject to the following conditions:
@@ -678,9 +674,9 @@ subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
