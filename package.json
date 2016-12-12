@@ -1,5 +1,5 @@
 {
-  "name": "odbc",
+  "name": "nonunicode-odbc",
   "description": "unixodbc bindings for node",
   "version": "1.2.1",
   "main": "lib/odbc.js",
