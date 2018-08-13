@@ -54,6 +54,7 @@ void ODBCResult::Init(v8::Handle<Object> exports) {
   Nan::SetPrototypeMethod(constructor_template, "fetchSync", FetchSync);
   Nan::SetPrototypeMethod(constructor_template, "fetchAllSync", FetchAllSync);
   Nan::SetPrototypeMethod(constructor_template, "getColumnNamesSync", GetColumnNamesSync);
+  Nan::SetPrototypeMethod(constructor_template, "getRowCountSync", GetRowCountSync);
 
   // Properties
   OPTION_FETCH_MODE.Reset(Nan::New("fetchMode").ToLocalChecked());
@@ -184,7 +185,7 @@ NAN_METHOD(ODBCResult::Fetch) {
     
     Local<String> fetchModeKey = Nan::New<String>(OPTION_FETCH_MODE);
     if (obj->Has(fetchModeKey) && obj->Get(fetchModeKey)->IsInt32()) {
-      data->fetchMode = obj->Get(fetchModeKey)->ToInt32()->Value();
+      data->fetchMode = Nan::To<Uint32>(obj->Get(fetchModeKey)).ToLocalChecked()->Value();
     }
   }
   else {
@@ -337,7 +338,7 @@ NAN_METHOD(ODBCResult::FetchSync) {
     
     Local<String> fetchModeKey = Nan::New<String>(OPTION_FETCH_MODE);
     if (obj->Has(fetchModeKey) && obj->Get(fetchModeKey)->IsInt32()) {
-      fetchMode = obj->Get(fetchModeKey)->ToInt32()->Value();
+      fetchMode = Nan::To<Uint32>(obj->Get(fetchModeKey)).ToLocalChecked()->Value();
     }
   }
   
@@ -433,7 +434,7 @@ NAN_METHOD(ODBCResult::FetchAll) {
     
     Local<String> fetchModeKey = Nan::New<String>(OPTION_FETCH_MODE);
     if (obj->Has(fetchModeKey) && obj->Get(fetchModeKey)->IsInt32()) {
-      data->fetchMode = obj->Get(fetchModeKey)->ToInt32()->Value();
+      data->fetchMode = Nan::To<Uint32>(obj->Get(fetchModeKey)).ToLocalChecked()->Value();
     }
   }
   else {
@@ -594,7 +595,7 @@ NAN_METHOD(ODBCResult::FetchAllSync) {
     
     Local<String> fetchModeKey = Nan::New<String>(OPTION_FETCH_MODE);
     if (obj->Has(fetchModeKey) && obj->Get(fetchModeKey)->IsInt32()) {
-      fetchMode = obj->Get(fetchModeKey)->ToInt32()->Value();
+      fetchMode = Nan::To<Uint32>(obj->Get(fetchModeKey)).ToLocalChecked()->Value();
     }
   }
   
@@ -744,9 +745,36 @@ NAN_METHOD(ODBCResult::GetColumnNamesSync) {
   }
   
   for (int i = 0; i < self->colCount; i++) {
+#ifdef UNICODE
     cols->Set(Nan::New(i),
-              Nan::New((const char *) self->columns[i].name).ToLocalChecked());
+              Nan::New((uint16_t*) self->columns[i].name).ToLocalChecked());
+#else
+    cols->Set(Nan::New(i),
+              Nan::New((char *) self->columns[i].name).ToLocalChecked());
+#endif
+
   }
     
   info.GetReturnValue().Set(cols);
+}
+
+/*
+ * GetRowCountSync
+ */
+
+NAN_METHOD(ODBCResult::GetRowCountSync) {
+  DEBUG_PRINTF("ODBCResult::GetRowCountSync\n");
+  Nan::HandleScope scope;
+
+  ODBCResult* self = Nan::ObjectWrap::Unwrap<ODBCResult>(info.Holder());
+
+  SQLLEN rowCount = 0;
+
+  SQLRETURN ret = SQLRowCount(self->m_hSTMT, &rowCount);
+
+  if (!SQL_SUCCEEDED(ret)) {
+    rowCount = 0;
+  }
+
+  info.GetReturnValue().Set(Nan::New<Number>(rowCount));
 }
