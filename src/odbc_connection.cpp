@@ -72,7 +72,9 @@ void ODBCConnection::Init(v8::Handle<Object> exports) {
   Nan::SetPrototypeMethod(constructor_template, "beginTransactionSync", BeginTransactionSync);
   Nan::SetPrototypeMethod(constructor_template, "endTransaction", EndTransaction);
   Nan::SetPrototypeMethod(constructor_template, "endTransactionSync", EndTransactionSync);
-  
+
+  Nan::SetPrototypeMethod(constructor_template, "getInfoSync", GetInfoSync);
+
   Nan::SetPrototypeMethod(constructor_template, "columns", Columns);
   Nan::SetPrototypeMethod(constructor_template, "tables", Tables);
   
@@ -194,13 +196,13 @@ NAN_METHOD(ODBCConnection::Open) {
   open_connection_work_data* data = (open_connection_work_data *) 
     calloc(1, sizeof(open_connection_work_data));
 
-  data->connectionLength = connection->Length() + 1;
-
   //copy the connection string to the work data  
 #ifdef UNICODE
+  data->connectionLength = connection->Length() + 1;
   data->connection = (uint16_t *) malloc(sizeof(uint16_t) * data->connectionLength);
   connection->Write((uint16_t*) data->connection);
 #else
+  data->connectionLength = connection->Utf8Length() + 1;
   data->connection = (char *) malloc(sizeof(char) * data->connectionLength);
   connection->WriteUtf8((char*) data->connection);
 #endif
@@ -307,19 +309,12 @@ void ODBCConnection::UV_AfterOpen(uv_work_t* req, int status) {
 
   if (!err) {
    data->conn->self()->connected = true;
-    
-    //only uv_ref if the connection was successful
-//#if NODE_VERSION_AT_LEAST(0, 7, 9)
-//    uv_ref((uv_handle_t *)&ODBC::g_async);
-//#else
-//    uv_ref(uv_default_loop());
-//#endif
   }
 
   Nan::TryCatch try_catch;
 
   data->conn->Unref();
-  data->cb->Call(err ? 1 : 0, argv);
+  data->cb->Call(data->conn->handle(), err ? 1 : 0, argv);
 
   if (try_catch.HasCaught()) {
     Nan::FatalException(try_catch);
@@ -351,12 +346,12 @@ NAN_METHOD(ODBCConnection::OpenSync) {
   SQLRETURN ret;
   bool err = false;
   
-  int connectionLength = connection->Length() + 1;
-  
 #ifdef UNICODE
+  int connectionLength = connection->Length() + 1;
   uint16_t* connectionString = (uint16_t *) malloc(connectionLength * sizeof(uint16_t));
   connection->Write(connectionString);
 #else
+  int connectionLength = connection->Utf8Length() + 1;
   char* connectionString = (char *) malloc(connectionLength);
   connection->WriteUtf8(connectionString);
 #endif
@@ -419,13 +414,6 @@ NAN_METHOD(ODBCConnection::OpenSync) {
     ret = SQLFreeHandle( SQL_HANDLE_STMT, hStmt);
     
     conn->self()->connected = true;
-    
-    //only uv_ref if the connection was successful
-    /*#if NODE_VERSION_AT_LEAST(0, 7, 9)
-      uv_ref((uv_handle_t *)&ODBC::g_async);
-    #else
-      uv_ref(uv_default_loop());
-    #endif*/
   }
 
   uv_mutex_unlock(&ODBC::g_odbcMutex);
@@ -504,13 +492,6 @@ void ODBCConnection::UV_AfterClose(uv_work_t* req, int status) {
   }
   else {
     conn->connected = false;
-    
-    //only unref if the connection was closed
-//#if NODE_VERSION_AT_LEAST(0, 7, 9)
-//    uv_unref((uv_handle_t *)&ODBC::g_async);
-//#else
-//    uv_unref(uv_default_loop());
-//#endif
   }
 
   Nan::TryCatch try_catch;
@@ -545,12 +526,6 @@ NAN_METHOD(ODBCConnection::CloseSync) {
   
   conn->connected = false;
 
-#if NODE_VERSION_AT_LEAST(0, 7, 9)
-  uv_unref((uv_handle_t *)&ODBC::g_async);
-#else
-  uv_unref(uv_default_loop());
-#endif
-  
   info.GetReturnValue().Set(Nan::True());
 }
 
@@ -581,7 +556,7 @@ NAN_METHOD(ODBCConnection::CreateStatementSync) {
   params[1] = Nan::New<External>(conn->m_hDBC);
   params[2] = Nan::New<External>(hSTMT);
   
-  Local<Object> js_result(Nan::New<Function>(ODBCStatement::constructor)->NewInstance(3, params));
+  Local<Object> js_result(Nan::NewInstance(Nan::New(ODBCStatement::constructor), 3, params).ToLocalChecked());
   
   info.GetReturnValue().Set(js_result);
 }
@@ -670,11 +645,10 @@ void ODBCConnection::UV_AfterCreateStatement(uv_work_t* req, int status) {
   info[1] = Nan::New<External>(data->conn->m_hDBC);
   info[2] = Nan::New<External>(data->hSTMT);
   
-  Local<Value> js_result = Nan::New<Function>(ODBCStatement::constructor)->NewInstance(3, info);
+  Local<Object> js_result = Nan::NewInstance(Nan::New(ODBCStatement::constructor), 3, info).ToLocalChecked();
 
   info[0] = Nan::Null();
   info[1] = js_result;
-
 
   Nan::TryCatch try_catch;
 
@@ -791,14 +765,15 @@ NAN_METHOD(ODBCConnection::Query) {
   //Done checking arguments
 
   data->cb = new Nan::Callback(cb);
-  data->sqlLen = sql->Length();
 
 #ifdef UNICODE
+  data->sqlLen = sql->Length();
   data->sqlSize = (data->sqlLen * sizeof(uint16_t)) + sizeof(uint16_t);
   data->sql = (uint16_t *) malloc(data->sqlSize);
   sql->Write((uint16_t *) data->sql);
 #else
-  data->sqlSize = sql->Utf8Length() + 1;
+  data->sqlLen = sql->Utf8Length();
+  data->sqlSize = data->sqlLen + 1;
   data->sql = (char *) malloc(data->sqlSize);
   sql->WriteUtf8((char *) data->sql);
 #endif
@@ -914,7 +889,7 @@ void ODBCConnection::UV_AfterQuery(uv_work_t* req, int status) {
     info[2] = Nan::New<External>(data->hSTMT);
     info[3] = Nan::New<External>(canFreeHandle);
     
-    Local<Object> js_result = Nan::New<Function>(ODBCResult::constructor)->NewInstance(4, info);
+    Local<Object> js_result = Nan::NewInstance(Nan::New(ODBCResult::constructor), 4, info).ToLocalChecked();
 
     // Check now to see if there was an error (as there may be further result sets)
     if (data->result == SQL_ERROR) {
@@ -1163,11 +1138,56 @@ NAN_METHOD(ODBCConnection::QuerySync) {
     result[2] = Nan::New<External>(hSTMT);
     result[3] = Nan::New<External>(canFreeHandle);
     
-    Local<Object> js_result = Nan::New<Function>(ODBCResult::constructor)->NewInstance(4, result);
+    Local<Object> js_result = Nan::NewInstance(Nan::New(ODBCResult::constructor), 4, result).ToLocalChecked();
 
     info.GetReturnValue().Set(js_result);
   }
 }
+
+
+/*
+ * GetInfoSync
+ */
+
+NAN_METHOD(ODBCConnection::GetInfoSync) {
+  DEBUG_PRINTF("ODBCConnection::GetInfoSync\n");
+  Nan::HandleScope scope;
+
+  ODBCConnection* conn = Nan::ObjectWrap::Unwrap<ODBCConnection>(info.Holder());
+
+  if (info.Length() == 1) {
+    if ( !info[0]->IsNumber() ) {
+        return Nan::ThrowTypeError("ODBCConnection::GetInfoSync(): Argument 0 must be a Number.");
+    }
+  }
+  else {
+    return Nan::ThrowTypeError("ODBCConnection::GetInfoSync(): Requires 1 Argument.");
+  }
+
+  SQLUSMALLINT InfoType = info[0]->NumberValue();
+
+  switch (InfoType) {
+    case SQL_USER_NAME:
+      SQLRETURN ret;
+      SQLTCHAR userName[255];
+      SQLSMALLINT userNameLength;
+
+      ret = SQLGetInfo(conn->m_hDBC, SQL_USER_NAME, userName, sizeof(userName), &userNameLength);
+
+      if (SQL_SUCCEEDED(ret)) {
+#ifdef UNICODE
+        info.GetReturnValue().Set(Nan::New((uint16_t *)userName).ToLocalChecked());
+#else
+        info.GetReturnValue().Set(Nan::New((const char *) userName).ToLocalChecked());
+#endif
+      }
+      break;
+
+    default:
+      return Nan::ThrowTypeError("ODBCConnection::GetInfoSync(): The only supported Argument is SQL_USER_NAME.");
+  }
+}
+
 
 /*
  * Tables
@@ -1208,7 +1228,7 @@ NAN_METHOD(ODBCConnection::Tables) {
     data->catalog = (uint16_t *) malloc((catalog->Length() * sizeof(uint16_t)) + sizeof(uint16_t));
     catalog->Write((uint16_t *) data->catalog);
 #else
-    data->catalog = (char *) malloc(catalog->Length() + 1);
+    data->catalog = (char *) malloc(catalog->Utf8Length() + 1);
     catalog->WriteUtf8((char *) data->catalog);
 #endif
   }
@@ -1218,7 +1238,7 @@ NAN_METHOD(ODBCConnection::Tables) {
     data->schema = (uint16_t *) malloc((schema->Length() * sizeof(uint16_t)) + sizeof(uint16_t));
     schema->Write((uint16_t *) data->schema);
 #else
-    data->schema = (char *) malloc(schema->Length() + 1);
+    data->schema = (char *) malloc(schema->Utf8Length() + 1);
     schema->WriteUtf8((char *) data->schema);
 #endif
   }
@@ -1228,7 +1248,7 @@ NAN_METHOD(ODBCConnection::Tables) {
     data->table = (uint16_t *) malloc((table->Length() * sizeof(uint16_t)) + sizeof(uint16_t));
     table->Write((uint16_t *) data->table);
 #else
-    data->table = (char *) malloc(table->Length() + 1);
+    data->table = (char *) malloc(table->Utf8Length() + 1);
     table->WriteUtf8((char *) data->table);
 #endif
   }
@@ -1238,7 +1258,7 @@ NAN_METHOD(ODBCConnection::Tables) {
     data->type = (uint16_t *) malloc((type->Length() * sizeof(uint16_t)) + sizeof(uint16_t));
     type->Write((uint16_t *) data->type);
 #else
-    data->type = (char *) malloc(type->Length() + 1);
+    data->type = (char *) malloc(type->Utf8Length() + 1);
     type->WriteUtf8((char *) data->type);
 #endif
   }
@@ -1319,7 +1339,7 @@ NAN_METHOD(ODBCConnection::Columns) {
     data->catalog = (uint16_t *) malloc((catalog->Length() * sizeof(uint16_t)) + sizeof(uint16_t));
     catalog->Write((uint16_t *) data->catalog);
 #else
-    data->catalog = (char *) malloc(catalog->Length() + 1);
+    data->catalog = (char *) malloc(catalog->Utf8Length() + 1);
     catalog->WriteUtf8((char *) data->catalog);
 #endif
   }
@@ -1329,7 +1349,7 @@ NAN_METHOD(ODBCConnection::Columns) {
     data->schema = (uint16_t *) malloc((schema->Length() * sizeof(uint16_t)) + sizeof(uint16_t));
     schema->Write((uint16_t *) data->schema);
 #else
-    data->schema = (char *) malloc(schema->Length() + 1);
+    data->schema = (char *) malloc(schema->Utf8Length() + 1);
     schema->WriteUtf8((char *) data->schema);
 #endif
   }
@@ -1339,7 +1359,7 @@ NAN_METHOD(ODBCConnection::Columns) {
     data->table = (uint16_t *) malloc((table->Length() * sizeof(uint16_t)) + sizeof(uint16_t));
     table->Write((uint16_t *) data->table);
 #else
-    data->table = (char *) malloc(table->Length() + 1);
+    data->table = (char *) malloc(table->Utf8Length() + 1);
     table->WriteUtf8((char *) data->table);
 #endif
   }
@@ -1349,7 +1369,7 @@ NAN_METHOD(ODBCConnection::Columns) {
     data->column = (uint16_t *) malloc((column->Length() * sizeof(uint16_t)) + sizeof(uint16_t));
     column->Write((uint16_t *) data->column);
 #else
-    data->column = (char *) malloc(column->Length() + 1);
+    data->column = (char *) malloc(column->Utf8Length() + 1);
     column->WriteUtf8((char *) data->column);
 #endif
   }
