@@ -573,6 +573,9 @@ Handle<Value> ODBC::GetColumnValue( SQLHSTMT hStmt, Column column,
           if (len == 0) {
             break;
           }
+          if (len < bufferLength) {
+            break;
+          }
           
           count += 1;
         }
